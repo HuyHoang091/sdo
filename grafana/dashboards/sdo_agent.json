@@ -1,0 +1,146 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "panels": [
+    {
+      "title": "🤖 Agent Mode",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sdo_agent_mode",
+          "legendFormat": "{{service}} ({{mode}})"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "RL Active", "color": "green" }, "0.5": { "text": "Rule-based", "color": "yellow" }, "0": { "text": "Disabled", "color": "red" } } }
+          ]
+        }
+      }
+    },
+    {
+      "title": "⏱ Agent Uptime",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [
+        { "expr": "sdo_agent_uptime_seconds / 3600", "legendFormat": "hours" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "h" } }
+    },
+    {
+      "title": "🐳 Container Count",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [
+        { "expr": "sdo_agent_containers_count", "legendFormat": "{{service}}" }
+      ]
+    },
+    {
+      "title": "❤️ Health Ratio",
+      "type": "gauge",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [
+        { "expr": "sdo_agent_health_ratio", "legendFormat": "{{service}}" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0, "max": 1, "unit": "percentunit",
+          "thresholds": {
+            "steps": [
+              { "value": 0, "color": "red" },
+              { "value": 0.5, "color": "yellow" },
+              { "value": 0.9, "color": "green" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "📊 CPU & Memory Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "sdo_agent_cpu_percent", "legendFormat": "CPU % ({{service}})" },
+        { "expr": "sdo_agent_memory_percent", "legendFormat": "MEM % ({{service}})" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "min": 0, "max": 100 }
+      }
+    },
+    {
+      "title": "🎬 Actions Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        { "expr": "rate(sdo_agent_actions_total[5m])", "legendFormat": "{{action}} ({{service}})" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "title": "🏆 Average Reward",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "sdo_agent_reward_average", "legendFormat": "avg reward ({{service}})" }
+      ]
+    },
+    {
+      "title": "🔄 Fallbacks & Rollbacks",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 12 },
+      "targets": [
+        { "expr": "rate(sdo_agent_fallback_rulebased_total[5m])", "legendFormat": "fallback/s" },
+        { "expr": "rate(sdo_agent_rollback_total[5m])", "legendFormat": "rollback/s" },
+        { "expr": "rate(sdo_agent_cooldown_blocked_total[5m])", "legendFormat": "cooldown_blocked/s" }
+      ]
+    },
+    {
+      "title": "❌ Agent Errors & Dry-runs",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 12 },
+      "targets": [
+        { "expr": "rate(sdo_agent_errors_total[5m])", "legendFormat": "errors/s ({{service}})" },
+        { "expr": "rate(sdo_agent_dryrun_total[5m])", "legendFormat": "dryrun/s ({{service}})" }
+      ]
+    },
+    {
+      "title": "📈 Action Breakdown (Total)",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 18 },
+      "targets": [
+        { "expr": "sdo_agent_actions_total", "legendFormat": "{{action}}" }
+      ]
+    },
+    {
+      "title": "🐳 Container Count Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 18 },
+      "targets": [
+        { "expr": "sdo_agent_containers_count", "legendFormat": "containers ({{service}})" }
+      ]
+    },
+    {
+      "title": "📊 Cumulative Reward",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 18 },
+      "targets": [
+        { "expr": "sdo_agent_reward_total", "legendFormat": "total reward ({{service}})" }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["sdo", "agent", "rl"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "SDO Agent Dashboard",
+  "uid": "sdo-agent-dashboard"
+}

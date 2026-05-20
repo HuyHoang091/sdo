@@ -1,0 +1,249 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sdo-benchmark
+---
+# ============================================================
+# DEPLOYMENTS
+# ============================================================
+
+# --- TIER 1: Database (Critical) ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+  namespace: sdo-benchmark
+  labels:
+    app: db
+    sdo.tier: "1"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: db
+  template:
+    metadata:
+      labels:
+        app: db
+        sdo.tier: "1"
+    spec:
+      containers:
+        - name: db
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            capabilities:
+              add: ["NET_ADMIN"]
+
+---
+# --- TIER 2: API Backend (Important) ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: sdo-benchmark
+  labels:
+    app: api
+    sdo.tier: "2"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+        sdo.tier: "2"
+    spec:
+      containers:
+        - name: api
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            capabilities:
+              add: ["NET_ADMIN"]
+
+---
+# --- TIER 3: Web Frontend (Standard) ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+  namespace: sdo-benchmark
+  labels:
+    app: web-app
+    sdo.tier: "3"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+        sdo.tier: "3"
+    spec:
+      containers:
+        - name: web-app
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            capabilities:
+              add: ["NET_ADMIN"]
+
+---
+# ============================================================
+# SERVICES
+# ============================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  namespace: sdo-benchmark
+spec:
+  selector:
+    app: db
+  ports:
+    - port: 80
+      targetPort: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: sdo-benchmark
+spec:
+  selector:
+    app: api
+  ports:
+    - port: 80
+      targetPort: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app
+  namespace: sdo-benchmark
+spec:
+  type: NodePort
+  selector:
+    app: web-app
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30080
+
+---
+# ============================================================
+# HPA (Horizontal Pod Autoscaler)
+# ============================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-hpa
+  namespace: sdo-benchmark
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api
+  minReplicas: 1
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web-app-hpa
+  namespace: sdo-benchmark
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web-app
+  minReplicas: 1
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80

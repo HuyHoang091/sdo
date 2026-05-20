@@ -1,0 +1,42 @@
+services:
+  db:
+    tier: 1
+    depends_on: []
+    min_containers: 1
+    max_containers: 1
+    scalable: False
+    # === Replica scaling (tùy chọn, bật nếu DB có replica) ===
+    # replica_enabled: false
+    # replica_service: "db-replica"
+    # replica_min: 0
+    # replica_max: 3
+    # ===========================================================
+    cpu_high: 80
+    cpu_low: 20
+    mem_danger: 90
+    mem_warning: 80
+    cooldown_seconds: 60
+
+  api:
+    tier: 2
+    depends_on: [db]
+    min_containers: 1
+    max_containers: 6
+    scalable: True
+    cpu_high: 80
+    cpu_low: 20
+    mem_danger: 90
+    mem_warning: 80
+    cooldown_seconds: 45
+
+  web-app:
+    tier: 3
+    depends_on: [api]
+    min_containers: 1
+    max_containers: 8
+    scalable: True
+    cpu_high: 80
+    cpu_low: 20
+    mem_danger: 90
+    mem_warning: 80
+    cooldown_seconds: 30

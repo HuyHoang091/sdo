@@ -1,0 +1,71 @@
+1. Cách xem Metrics của DB, API, Web-App
+Vì Kubernetes đã được cài đặt Metrics Server, nó liên tục thu thập CPU/RAM của các container. Bạn dùng các lệnh sau:
+
+Xem CPU và RAM trực tiếp của từng Pod:
+
+$env:PATH = "$env:USERPROFILE\.local\bin;$env:PATH"
+kubectl top pods -n sdo-benchmark
+
+Kết quả sẽ hiển thị cột CPU (tính bằng milli-cores, vd: 10m = 1% của 1 core) và Memory (tính bằng Mi).
+
+Xem Metrics thời gian thực (tự động cập nhật mỗi 2 giây):
+
+$env:PATH = "$env:USERPROFILE\.local\bin;$env:PATH"
+kubectl top pods -n sdo-benchmark --watch
+
+(Lưu ý: trên Windows --watch của top đôi khi không mượt, bạn có thể chạy lệnh top pods thủ công nhiều lần nếu cần).
+
+Xem trạng thái Auto-scaling (HPA) qua Metrics:
+
+$env:PATH = "$env:USERPROFILE\.local\bin;$env:PATH"
+kubectl get hpa -n sdo-benchmark -w
+
+Lệnh này rất hay để xem khi nào api hoặc web-app bị vượt ngưỡng CPU 80% và K8s quyết định scale replicas lên.
+
+2. Các lệnh tổng hợp để Set up và Chạy Benchmark K8s
+Đây là kịch bản đầy đủ chúng ta vừa thực hiện để bạn có thể báo cáo trong luận văn hoặc chạy lại sau này nếu cần:
+
+Bước 1: Khởi tạo cụm K8s ảo (Kind)
+
+kind create cluster --config k8s/kind-config.yaml
+
+Bước 2: Triển khai các dịch vụ SDO (DB, API, Web-App)
+
+kubectl apply -f k8s/manifests.yaml
+
+Bước 3: Cài đặt Metrics Server (Bắt buộc để K8s biết được CPU/RAM mà auto scale)
+
+# Cài bản mới nhất
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+
+# Patch dành riêng cho cụm ảo Kind để bỏ qua check TLS cho môi trường dev
+kubectl patch deployment metrics-server -n kube-system --type='json' -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--kubelet-insecure-tls"}]'
+
+Bước 4: Chạy Benchmark Đợi khoảng 1-2 phút cho Metrics Server sẵn sàng, sau đó chạy:
+
+python tests/benchmark_k8s.py
+
+Bước 5 (Tùy chọn): So sánh kết quả Nếu bạn đã có kết quả chạy của SDO Agent (evaluation_report.md / sdo_benchmark_results.json) từ hôm trước, bạn chạy lệnh sau để tổng hợp so sánh ra biểu đồ:
+
+python tests/benchmark_compare.py
+
+Cứ treo terminal đó nhé, khoảng 45 phút nữa chúng ta lấy file kết quả!
+
+Bước 6: Dọn dẹp môi trường (Y chang docker-compose down)
+Xóa sạch toàn bộ cụm K8s ảo:
+
+kind delete cluster --name sdo-bench
+
+Cách 1: Chỉ xóa các app (giữ lại cluster K8s để sau này dùng tiếp)
+Cách này giống như bạn xóa các container nhưng vẫn giữ lại môi trường K8s đang chạy ngầm.
+
+powershell
+$env:PATH = "$env:USERPROFILE\.local\bin;$env:PATH"
+kubectl delete -f k8s/manifests.yaml
+
+Cách 2: Phá hủy luôn toàn bộ cụm K8s (Nhanh, sạch sẽ - Khuyên dùng)
+Vì chúng ta dùng kind (Kubernetes IN Docker) để tạo một cụm mô phỏng trong Docker, cách nhanh và sạch nhất sau khi test xong là xóa luôn cái cluster ảo này:
+
+powershell
+kind delete cluster --name sdo-bench
+(Ngay khi chạy lệnh này, tất cả db, api, web-app và metrics-server bên trong nó sẽ bay màu hết, môi trường máy tính của bạn sẽ sạch 100% về trạng thái ban đầu).

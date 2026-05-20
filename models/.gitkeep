@@ -1,0 +1,4 @@
+# Placeholder — thư mục này chứa trained models
+# File ONNX sẽ được tạo sau khi chạy:
+#   python -m orchestrator.main train-offline <data.json>
+#   python -m orchestrator.main export-onnx
