@@ -1,0 +1,139 @@
+# ============================================================
+# SDO v3.0 — All-In-One Single Image
+# ============================================================
+# Một image duy nhất bao gồm:
+#   Prometheus + cAdvisor + Node Exporter + SDO Dashboard + SDO UI
+#
+# --- Cách dùng trong project khác ---
+# 1. Build image từ repo SDO:
+#      docker build -t <user>/sdo:latest .
+#    Hoặc pull từ Docker Hub (nếu đã public):
+#      docker pull sdoproject/sdo:latest
+#
+# 2. Copy file này vào project của bạn
+# 3. Trong docker-compose.yml của project, thêm:
+#
+#    include:
+#      - path: ./docker-compose.sdo.yml
+#
+#    (hoặc nếu dùng Docker Compose cũ:)
+#    docker compose -f docker-compose.yml -f docker-compose.sdo.yml up -d
+#
+# 4. Tạo file sdo.yml cùng cấp để khai báo service cần quản lý
+# 5. Đảm bảo các service trong project có label:
+#      - "sdo.managed=true"
+#      - "sdo.service=<tên-service>"
+# ============================================================
+
+services:
+  sdo:
+    image: sdo:latest
+    privileged: true
+    restart: unless-stopped
+    volumes:
+      - ./sdo.yml:/app/sdo.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /:/host:ro
+      # Tùy chọn: mount models nếu có model custom
+      - ./models:/app/models:ro
+      - ./docker-compose.sdo.yml:/app/docker-compose.yml:ro  # để agent đọc limits
+    environment:
+      - SDO_SERVICE=web-app
+      - SDO_CONFIG=/app/sdo.yml
+      - SDO_AGENT_MODE=dry-run       # dry-run | live | rule-based
+      - SDO_PROM_PORT=9090
+      - SDO_METRICS_PORT=9200
+      - SDO_CADVISOR_PORT=8080
+      - SDO_NODE_EXPORTER_PORT=9100
+      - SDO_DASHBOARD_PORT=9300
+      - PYTHONUNBUFFERED=1
+      
+      - SDO_COMPOSE_FILE=/app/docker-compose.yml
+    ports:
+      - "5174:80"      # SDO UI (nginx)
+      - "9090:9090"    # Prometheus UI
+      - "8080:8080"    # cAdvisor UI
+      - "9100:9100"    # Node Exporter metrics
+      - "9200:9200"    # SDO Agent metrics
+      - "9300:9300"    # SDO Dashboard API
+    # Mặc định SDO_CMD=agent → supervisord khởi động tất cả services
+
+  # ===== TIER 1: Database (Critical) =====
+  db:
+    image: nginx:alpine
+    stop_signal: SIGQUIT
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    labels:
+      - "sdo.managed=true"
+      - "sdo.service=db"
+      - "sdo.tier=1"
+    ports:
+      - "8081:80"
+
+  # ===== TIER 2: API Backend (Important) =====
+  api:
+    image: nginx:alpine
+    stop_signal: SIGQUIT
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost && wget --spider -q http://db"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    labels:
+      - "sdo.managed=true"
+      - "sdo.service=api"
+      - "sdo.tier=2"
+    # ports:
+    #   - "8082:80"
+    expose:
+      - "80"
+
+  # ===== TIER 3: Web Frontend (Standard) =====
+  web-app:
+    image: nginx:alpine
+    stop_signal: SIGQUIT
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    depends_on:
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost && wget --spider -q http://api"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    labels:
+      - "sdo.managed=true"
+      - "sdo.service=web-app"
+      - "sdo.tier=3"

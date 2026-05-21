@@ -273,51 +273,24 @@ class LiveAgent:
                     )
                     self.metrics.record_dryrun(self.service)
                 else:
-                    # FIX WEAK-2: Chỉ snapshot nếu chưa có snapshot active
                     self.rollback.snapshot_before_action(self.service, state, action_name)
                     executed = self._execute_action(action, state)
-                    # Chỉ cooldown nếu action THỰC SỰ thực hiện (VD: scale_down blocked → không cooldown)
                     if executed:
                         self.cooldown.record_action(self.service, action_name)
-                    else:
-                        log.info("Action '%s' was blocked (limits), skipping cooldown", action_name)
 
-                # Metrics + webhook cho action (kể cả dry-run)
                 self.metrics.record_action(self.service, action_name)
-                if has_webhooks():
-                    send_event(
-                        "action_performed",
-                        {
-                            "service": self.service,
-                            "time": datetime.now().isoformat(),
-                            "action": action_name,
-                            "decision_source": decision_source,
-                            "dry_run": self.is_dry_run,
-                            "state": {
-                                "cpu": round(state.cpu_percent, 2),
-                                "mem": round(state.memory_percent, 2),
-                                "containers": state.container_count,
-                                "healthy": state.healthy_count,
-                                "host_cpu": round(state.host_cpu_available, 2),
-                                "host_mem": round(state.host_mem_available, 2),
-                                "error_rate": getattr(state, "error_rate", None),
-                                "response_time_ms": getattr(state, "response_time_ms", None),
-                            },
-                        },
-                    )
 
-            # 7. Rollback check (live mode only)
             if not self.is_dry_run and not self._rl_disabled_by_rollback:
                 should_rollback, reason = self.rollback.check_post_action(self.service, state)
                 if should_rollback:
                     self._handle_rollback(reason)
 
-            # 8. Append to log
             self.action_log.append({
                 "step": self.step_count,
                 "time": datetime.now().isoformat(),
                 "mode": self.effective_mode,
                 "decision_source": decision_source,
+                "service": self.service,
                 "state": {
                     "cpu": round(state.cpu_percent, 2),
                     "mem": round(state.memory_percent, 2),
@@ -332,13 +305,33 @@ class LiveAgent:
                 "executed": not self.is_dry_run and action_name not in ("no_op", "no_op (cooldown)"),
             })
 
-            # FIX WEAK-6: Flush log periodic
             if self.step_count % LOG_FLUSH_INTERVAL == 0:
                 self._flush_log()
 
         except Exception as e:
             log.error("[%04d] Error: %s", self.step_count, e, exc_info=True)
             self.metrics.record_error(self.service)
+            if has_webhooks():
+                send_event(
+                    "agent_error",
+                    {
+                        "service": self.service,
+                        "time": datetime.now().isoformat(),
+                        "message": str(e),
+                        "state": {
+                            "cpu": round(getattr(state, "cpu_percent", 0.0), 2) if "state" in locals() else 0.0,
+                            "mem": round(getattr(state, "memory_percent", 0.0), 2) if "state" in locals() else 0.0,
+                            "containers": getattr(state, "container_count", 0) if "state" in locals() else 0,
+                            "healthy": getattr(state, "healthy_count", 0) if "state" in locals() else 0,
+                            "error_rate": getattr(state, "error_rate", 0.0) if "state" in locals() else 0.0,
+                            "response_time_ms": getattr(state, "response_time_ms", 0.0) if "state" in locals() else 0.0,
+                        },
+                        "data": {
+                            "step": self.step_count,
+                            "mode": self.effective_mode,
+                        },
+                    },
+                )
 
     def _graceful_drain(self, action_name: str, target_container_id: Optional[str] = None, service: str = None):
         """

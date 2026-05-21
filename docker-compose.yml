@@ -139,6 +139,16 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
 
+  # === SDO UI (Frontend) ===
+  sdo-ui:
+    build:
+      context: ./sdo-ui
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      # Giao diện trên trình duyệt sẽ được map ra cổng 5174 của máy tính bạn
+      - "5174:80"
+
 volumes:
   prometheus_data:
   grafana_data:

@@ -1,40 +1,55 @@
+# ============================================================
+# SDO Service Configuration Template
+# ============================================================
+# Copy file này vào project của bạn và chỉnh sửa theo topology
+# service thực tế. Mỗi service cần khớp với:
+#   - label "sdo.service=<name>" trong docker-compose
+#   - name container được Docker tạo ra
+#
+# --- Tier Guide ---
+# tier 1: Database / Critical (không scale, không restart tự động)
+# tier 2: API / Business Logic (scale được, restart khi cần)
+# tier 3: Frontend / Gateway (scale cao nhất, dễ replace)
+#
+# --- Scaling Rules ---
+# scalable: true  -> SDO được phép scale up/down container
+# scalable: false -> SDO chỉ monitor, không đụng vào số replica
+# ============================================================
+
 services:
+  # --- Ví dụ: Database (Tier 1) ---
   db:
     tier: 1
-    depends_on: []
+    depends_on: []           # Tier 1 không phụ thuộc service nào
     min_containers: 1
     max_containers: 1
-    scalable: False
-    # === Replica scaling (tùy chọn, bật nếu DB có replica) ===
-    # replica_enabled: false
-    # replica_service: "db-replica"
-    # replica_min: 0
-    # replica_max: 3
-    # ===========================================================
-    cpu_high: 80
-    cpu_low: 20
-    mem_danger: 90
-    mem_warning: 80
-    cooldown_seconds: 60
+    scalable: false          # DB thường không scale horizontal
+    cpu_high: 80             # Ngưỡng CPU% để cảnh báo / trigger action
+    cpu_low: 20              # Ngưỡng CPU% thấp (để scale down nếu cần)
+    mem_danger: 90           # Memory % nguy hiểm -> incident
+    mem_warning: 80          # Memory % cảnh báo
+    cooldown_seconds: 60     # Thời gian chờ giữa các action
 
+  # --- Ví dụ: API Backend (Tier 2) ---
   api:
     tier: 2
-    depends_on: [db]
+    depends_on: [db]         # Phụ thuộc db, rollback nếu db lỗi
     min_containers: 1
     max_containers: 6
-    scalable: True
+    scalable: true
     cpu_high: 80
     cpu_low: 20
     mem_danger: 90
     mem_warning: 80
     cooldown_seconds: 45
 
+  # --- Ví dụ: Web Frontend (Tier 3) ---
   web-app:
     tier: 3
     depends_on: [api]
     min_containers: 1
     max_containers: 8
-    scalable: True
+    scalable: true
     cpu_high: 80
     cpu_low: 20
     mem_danger: 90

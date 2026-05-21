@@ -165,6 +165,69 @@ class PrometheusMonitor:
             log.debug("Cannot list containers via Docker API: %s", e)
             return []
 
+    def _get_docker_stats(self, service_name: str) -> tuple[float, float, int]:
+        """
+        Fallback: lấy CPU% và MEM% trực tiếp từ Docker API stats.
+        Dùng trên Windows/WSL2 nơi cAdvisor không đọc được container metrics.
+        Returns: (cpu_percent, mem_percent, container_count)
+        """
+        if self.docker_client is None:
+            return 0.0, 0.0, 0
+        try:
+            containers = self.docker_client.containers.list(
+                filters={"label": f"com.docker.compose.service={service_name}"}
+            )
+            if not containers:
+                return 0.0, 0.0, 0
+
+            total_cpu = 0.0
+            total_mem = 0.0
+            count = 0
+            for c in containers:
+                try:
+                    stats = c.stats(stream=False)
+                    # Memory percent (luôn có)
+                    mem_usage = stats.get("memory_stats", {}).get("usage", 0)
+                    mem_limit = stats.get("memory_stats", {}).get("limit", 1)
+                    if mem_limit > 0:
+                        total_mem += (mem_usage / mem_limit) * 100
+
+                    # CPU percent — xử lý Windows Docker Desktop edge cases
+                    cpu_stats = stats.get("cpu_stats", {})
+                    precpu_stats = stats.get("precpu_stats", {})
+                    
+                    cpu_usage = cpu_stats.get("cpu_usage", {})
+                    precpu_usage = precpu_stats.get("cpu_usage", {})
+                    
+                    total_usage = cpu_usage.get("total_usage", 0)
+                    prev_total = precpu_usage.get("total_usage", 0)
+                    cpu_delta = total_usage - prev_total
+                    
+                    system_usage = cpu_stats.get("system_cpu_usage", 0)
+                    prev_system = precpu_stats.get("system_cpu_usage", 0)
+                    system_delta = system_usage - prev_system
+                    
+                    # Windows Docker: system_delta có thể = 0, dùng online_cpus
+                    percpu = cpu_usage.get("percpu_usage", [])
+                    cpu_count = len(percpu) if percpu else cpu_usage.get("online_cpus", 1)
+                    
+                    if system_delta > 0 and cpu_delta > 0:
+                        cpu_pct = (cpu_delta / system_delta) * cpu_count * 100
+                        total_cpu += cpu_pct
+                    elif total_usage > 0:
+                        # Fallback: ước tính từ total_usage (không chính xác nhưng có giá trị)
+                        total_cpu += 0.5  # Đánh dấu có activity
+                    count += 1
+                except Exception as e:
+                    log.debug("Docker stats error for container %s: %s", c.id[:12], e)
+                    continue
+            avg_cpu = total_cpu / count if count > 0 else 0.0
+            avg_mem = total_mem / count if count > 0 else 0.0
+            return avg_cpu, avg_mem, count
+        except Exception as e:
+            log.debug("Docker stats fallback failed for %s: %s", service_name, e)
+            return 0.0, 0.0, 0
+
 ######################################
 
     def _probe_containers(self, service_name: str) -> tuple[float, float]:
@@ -388,6 +451,14 @@ class PrometheusMonitor:
             f'container_spec_memory_limit_bytes{{{pql_filter}}}'
         )
         mem_percent = (mem_bytes / mem_limit * 100) if mem_limit > 0 else 0.0
+
+        # Fallback: Windows/WSL2 — cAdvisor không đọc được container metrics
+        if cpu_percent == 0.0 and mem_percent == 0.0:
+            docker_cpu, docker_mem, docker_count = self._get_docker_stats(service_name)
+            if docker_count > 0:
+                cpu_percent = docker_cpu
+                mem_percent = docker_mem
+                log.debug("Using Docker API stats for %s (cAdvisor unavailable)", service_name)
 
         net_rx_rate = self.query_sum(
             f'rate(container_network_receive_bytes_total{{{pql_filter}}}[1m])'

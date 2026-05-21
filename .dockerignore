@@ -1,20 +1,71 @@
+# Git & IDE
 .git
-.pytest_cache
+.gitignore
+.gitattributes
+.vscode/
+.idea/
+
+# Python
 __pycache__/
-*.pyc
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+ENV/
+
+# Test & CI
+.pytest_cache/
+tests/
+test_*.py
+*_test.py
+.coverage
+htmlcov/
+
+# Logs & data
 logs/
 training_data/
-tests/
+*.log
+
+# Docs
+*.md
+!README.md
+
+# K8s & deploy scripts (không cần trong image)
 k8s/
-grafana/
+*.yaml
+*.yml
+!requirements*.txt
+!sdo.yml
+
+# Benchmark & reports
 benchmark_*.png
 benchmark_comparison.md
 evaluation_report.md
 k8s*.json
 k8s*.md
+
+# Models heavy (ONNX giữ lại, train weights bỏ)
 models/*.zip
 models/*.pt
 models/*.pth
 models/*.ckpt
+
+# Frontend build artifacts
 sdo-ui/node_modules/
 sdo-ui/dist/
+sdo-ui/.vite/
+sdo-ui/coverage/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Misc
+.DS_Store
+Thumbs.db
